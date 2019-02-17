@@ -1,0 +1,8 @@
+﻿#csv保存フォルダ
+/csv/
+# html保存フォルダ
+/ramen/
+# logファイル
+/gotrading.log
+# 設定ファイル
+/config.ini
