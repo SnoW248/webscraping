@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bitcoinProjects/config"
 	"context"
 	"encoding/csv"
 	"fmt"
@@ -129,7 +128,7 @@ func WriteCSV(stores []StoreInfo) {
 }
 
 func main() {
-	utils.LoggingSettings(config.Config.LogFile)
+	utils.LoggingSettings("webscraping.log")
 	GetPage("https://tabelog.com/rstLst/ramen/")
 	GetInfo("ramen")
 }
