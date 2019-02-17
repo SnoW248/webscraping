@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -21,13 +23,13 @@ import (
 )
 
 type StoreInfo struct {
-	URL       string
-	StoreName string
-	Genre     string
-	Point     float64
-	Address   string
-	latitude  float64
-	longitude float64
+	URL       string  `json:"url"`
+	StoreName string  `json:"storename"`
+	Genre     string  `json:"genre"`
+	Point     float64 `json:"point"`
+	Address   string  `json:"address"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
 }
 
 func GetPage(baseUrl string) {
@@ -83,26 +85,34 @@ func GetGeocode(address string) (latitude, longitude float64) {
 	return result[0].Geometry.Location.Lat, result[0].Geometry.Location.Lng
 }
 
-func GetInfo(dir string) {
+func GetInfo(dir string, page int, writeMode string) {
 	filesInfo, _ := ioutil.ReadDir(dir)
-	for _, fileInfo := range filesInfo {
+	var stores []StoreInfo
+	for i, fileInfo := range filesInfo {
+		if i > page {
+			break
+		}
 		file, _ := ioutil.ReadFile(dir + "/" + fileInfo.Name())
 		stringReader := strings.NewReader(string(file))
 		doc, _ := goquery.NewDocumentFromReader(stringReader)
 
-		var stores []StoreInfo
 		var store StoreInfo
 		store.Genre = dir
 		doc.Find("ul.js-rstlist-info li.list-rst").Each(func(_ int, s *goquery.Selection) {
 			store.URL, _ = s.Find("a.list-rst__rst-name-target.cpy-rst-name").Attr("href")
 			store.Address = GetAddress(store.URL)
-			store.latitude, store.longitude = GetGeocode(store.Address)
+			store.Latitude, store.Longitude = GetGeocode(store.Address)
 			store.StoreName = s.Find("a.list-rst__rst-name-target.cpy-rst-name").Text()
 			store.Point, _ = strconv.ParseFloat(s.Find("span.c-rating__val.c-rating__val--strong.list-rst__rating-val").Text(), 64)
 			stores = append(stores, store)
 		})
 		log.Println(stores)
+	}
+	
+	if writeMode == "csv" {
 		WriteCSV(stores)
+	} else if writeMode == "json" {
+		WriteJson(stores)
 	}
 }
 
@@ -120,15 +130,29 @@ func WriteCSV(stores []StoreInfo) {
 			strconv.FormatFloat(store.Point, 'f', 4, 64),
 			store.URL,
 			store.Address,
-			strconv.FormatFloat(store.latitude, 'f', 4, 64),
-			strconv.FormatFloat(store.longitude, 'f', 4, 64),
+			strconv.FormatFloat(store.Latitude, 'f', 4, 64),
+			strconv.FormatFloat(store.Longitude, 'f', 4, 64),
 		})
 	}
 	writer.Flush()
 }
 
+func WriteJson(stores []StoreInfo) {
+	jsonStore, err := json.Marshal(stores)
+	if err != nil {
+		fmt.Println("JSON Marshal error:", err)
+		return
+	}
+
+	out := new(bytes.Buffer)
+	// プリフィックスなし、スペース4つでインデント
+	json.Indent(out, jsonStore, "", "    ")
+
+	ioutil.WriteFile("csv/ramen.json", out.Bytes(), 0664)
+}
+
 func main() {
 	utils.LoggingSettings("webscraping.log")
-	GetPage("https://tabelog.com/rstLst/ramen/")
-	GetInfo("ramen")
+	// GetPage("https://tabelog.com/rstLst/ramen/")
+	GetInfo("ramen", 3, "csv")
 }
