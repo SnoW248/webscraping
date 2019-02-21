@@ -1,4 +1,4 @@
-package main
+package controllers
 
 import (
 	"bytes"
@@ -12,7 +12,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"webscraping/utils"
 
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/transform"
@@ -35,7 +34,7 @@ type StoreInfo struct {
 func GetPage(baseUrl string) {
 	base, _ := url.Parse(baseUrl)
 	for page := 1; page < 61; page++ {
-		reference, _ := url.Parse(strconv.Itoa(page) + "/?Srt=D&SrtT=rt&sort_mode=1&sk=%E3%83%A9%E3%83%BC%E3%83%A1%E3%83%B3&svd=20190216&svt=1900&svps=2")
+		reference, _ := url.Parse(strconv.Itoa(page) + "/?Srt=D&SrtT=rt&sort_mode=1&sk=%E3%83%A9%E3%83%BC%E3%83%A1%E3%83%B3&svt=1900&svps=2")
 		endpoint := base.ResolveReference(reference).String()
 		doc, err := goquery.NewDocument(endpoint)
 		if err != nil {
@@ -108,7 +107,7 @@ func GetInfo(dir string, page int, writeMode string) {
 		})
 		log.Println(stores)
 	}
-	
+
 	if writeMode == "csv" {
 		WriteCSV(stores)
 	} else if writeMode == "json" {
@@ -151,8 +150,16 @@ func WriteJson(stores []StoreInfo) {
 	ioutil.WriteFile("csv/ramen.json", out.Bytes(), 0664)
 }
 
-func main() {
-	utils.LoggingSettings("webscraping.log")
-	// GetPage("https://tabelog.com/rstLst/ramen/")
-	GetInfo("ramen", 3, "csv")
+func ReadJson() ([]StoreInfo, error) {
+	file, err := ioutil.ReadFile("csv/ramen.json")
+	if err != nil {
+		log.Fatalln(err)
+	}
+	var stores []StoreInfo
+
+	if err = json.Unmarshal(file, &stores); err != nil {
+		fmt.Println("JSON Marshal error:", err)
+		return nil, err
+	}
+	return stores, nil
 }
