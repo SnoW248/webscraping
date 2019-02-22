@@ -1,17 +1,14 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Simple Map</title>
+    <title>Ramen Map</title>
     <meta name="viewport" content="initial-scale=1.0">
     <meta charset="utf-8">
     <style>
-      /* Always set the map height explicitly to define the size of the div
-       * element that contains the map. */
       #map {
-        height: 50%;
-        width: 50%;
+        height: 100%;
+        width: 100%;
       }
-      /* Optional: Makes the sample page fill the window. */
       html, body {
         height: 100%;
         margin: 0;
@@ -21,48 +18,44 @@
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
   </head>
   <body>
-    <div id="map" style="display: inline-block;"></div>
-    <ul style="display: inline-block;">
-      <li>ラーメン</li>
-      <li>ラーメン</li>
-      <li>ラーメン</li>
-    </ul>
-    <button id="ajax">ajax</button>
-    <div class="result"></div>
+    <div id="map"></div>
 
     <script>
       var map;
+      var marker = []
+      var infoWindow = []
       function initMap() {
         map = new google.maps.Map(document.getElementById('map'), {
           center: {lat: 35.68, lng: 139.700},
-          zoom: 13
+          zoom: 10
         });
       }
-      // TODO
       $(function(){
-            // Ajax button click
-            $('#ajax').on('click',function(){
-                $.ajax({
-                    url:'http://localhost:8080/api/map/',
-                    type:'GET',
-                    ContentType:"jsonp",
-                })
-                // Ajaxリクエストが成功した時発動
-                .done( (data) => {
-                    $('.result').html(data);
-                    console.log(data);
-                })
-                // Ajaxリクエストが失敗した時発動
-                .fail( (data) => {
-                    $('.result').html(data);
-                    console.log(data);
-                })
-                // Ajaxリクエストが成功・失敗どちらでも発動
-                .always( (data) => {
+        $.ajax({
+            url:'/api/map/',
+            type:'GET',
+            ContentType:"json",
+        })
 
-                });
+        .done( (data) => {
+          for (var i = 0; i < data.length; i++) {
+            marker[i] = new google.maps.Marker({
+                position: {lat: data[i].latitude, lng: data[i].longitude},
+                map: map 
             });
+            infoWindow[i] = new google.maps.InfoWindow({ 
+              content: '<a href="'+data[i].url+'" target="_blank">'+data[i].storename+'</a>'
+            });
+            markerEvent(i);
+          }
+            console.log('ok');
         });
+      });
+      function markerEvent(i) {
+        marker[i].addListener('click', function() { 
+          infoWindow[i].open(map, marker[i]); 
+        });
+      }
     </script>
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDwJoaYQ5sFBZA0WZLFfvNWndOlHAwL8Rw&callback=initMap"
     async defer></script>
