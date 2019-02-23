@@ -1,4 +1,4 @@
-package controllers
+package models
 
 import (
 	"bytes"
@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/transform"
@@ -26,6 +27,7 @@ type StoreInfo struct {
 	StoreName string  `json:"storename"`
 	Genre     string  `json:"genre"`
 	Point     float64 `json:"point"`
+	Img       string  `json:"img"`
 	Address   string  `json:"address"`
 	Latitude  float64 `json:"latitude"`
 	Longitude float64 `json:"longitude"`
@@ -45,7 +47,7 @@ func GetPage(baseUrl string) {
 			fmt.Print("dom get failed")
 		}
 		title := fmt.Sprintf("%s.html", doc.Find("title").Text())
-		if err := ioutil.WriteFile("ramen/"+title, []byte(body), 0666); err != nil {
+		if err := ioutil.WriteFile("html/"+title, []byte(body), 0666); err != nil {
 			fmt.Println("write file err")
 		}
 	}
@@ -85,28 +87,42 @@ func GetGeocode(address string) (latitude, longitude float64) {
 }
 
 func GetInfo(dir string, page int, writeMode string) {
+	if file, _ := ioutil.ReadFile("data/ramen." + writeMode); file != nil {
+		return
+	}
 	filesInfo, _ := ioutil.ReadDir(dir)
 	var stores []StoreInfo
+	var wg sync.WaitGroup
+	maxCh := make(chan int, 10)
 	for i, fileInfo := range filesInfo {
+		wg.Add(1)
+		maxCh <- 1
 		if i > page {
+			wg.Done()
 			break
 		}
-		file, _ := ioutil.ReadFile(dir + "/" + fileInfo.Name())
-		stringReader := strings.NewReader(string(file))
-		doc, _ := goquery.NewDocumentFromReader(stringReader)
+		go func(i int, fileInfo os.FileInfo) {
+			defer wg.Done()
+			file, _ := ioutil.ReadFile(dir + "/" + fileInfo.Name())
+			stringReader := strings.NewReader(string(file))
+			doc, _ := goquery.NewDocumentFromReader(stringReader)
 
-		var store StoreInfo
-		store.Genre = dir
-		doc.Find("ul.js-rstlist-info li.list-rst").Each(func(_ int, s *goquery.Selection) {
-			store.URL, _ = s.Find("a.list-rst__rst-name-target.cpy-rst-name").Attr("href")
-			store.Address = GetAddress(store.URL)
-			store.Latitude, store.Longitude = GetGeocode(store.Address)
-			store.StoreName = s.Find("a.list-rst__rst-name-target.cpy-rst-name").Text()
-			store.Point, _ = strconv.ParseFloat(s.Find("span.c-rating__val.c-rating__val--strong.list-rst__rating-val").Text(), 64)
-			stores = append(stores, store)
-		})
-		log.Println(stores)
+			var store StoreInfo
+			store.Genre = dir
+			doc.Find("ul.js-rstlist-info li.list-rst").Each(func(_ int, s *goquery.Selection) {
+				store.URL, _ = s.Find("a.list-rst__rst-name-target.cpy-rst-name").Attr("href")
+				store.Address = GetAddress(store.URL)
+				store.Latitude, store.Longitude = GetGeocode(store.Address)
+				store.StoreName = s.Find("a.list-rst__rst-name-target.cpy-rst-name").Text()
+				store.Img, _ = s.Find("img.js-cassette-img").Attr("data-original")
+				store.Point, _ = strconv.ParseFloat(s.Find("span.c-rating__val.c-rating__val--strong.list-rst__rating-val").Text(), 64)
+				stores = append(stores, store)
+			})
+			log.Println(stores)
+			<-maxCh
+		}(i, fileInfo)
 	}
+	wg.Wait()
 
 	if writeMode == "csv" {
 		WriteCSV(stores)
@@ -128,6 +144,7 @@ func WriteCSV(stores []StoreInfo) {
 			store.StoreName,
 			strconv.FormatFloat(store.Point, 'f', 4, 64),
 			store.URL,
+			store.Img,
 			store.Address,
 			strconv.FormatFloat(store.Latitude, 'f', 4, 64),
 			strconv.FormatFloat(store.Longitude, 'f', 4, 64),

@@ -1,7 +1,7 @@
-﻿#csv保存フォルダ
-/csv/
+﻿#data保存フォルダ
+/data/
 # html保存フォルダ
-/ramen/
+/html/
 # logファイル
 /webscraping.log
 # 設定ファイル

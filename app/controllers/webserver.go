@@ -40,7 +40,7 @@ func APIError(w http.ResponseWriter, errMessage string, code int) {
 	w.Write(jsonError)
 }
 
-var apiValidPath = regexp.MustCompile("^/api/map/$")
+var apiValidPath = regexp.MustCompile("^/api/geocode/$")
 
 func apiMakeHandler(fn func(http.ResponseWriter, *http.Request)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -53,7 +53,7 @@ func apiMakeHandler(fn func(http.ResponseWriter, *http.Request)) http.HandlerFun
 }
 
 func mapHandler(w http.ResponseWriter, r *http.Request) {
-	json, err := ioutil.ReadFile("csv/ramen.json")
+	json, err := ioutil.ReadFile("data/ramen.json")
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -63,7 +63,7 @@ func mapHandler(w http.ResponseWriter, r *http.Request) {
 
 func StartWebServer() error {
 	http.HandleFunc("/", homeHandler)
-	http.HandleFunc("/api/map/", apiMakeHandler(mapHandler))
+	http.HandleFunc("/api/geocode/", apiMakeHandler(mapHandler))
 	http.HandleFunc("/map/", viewMapHandler)
 	return http.ListenAndServe(":8080", nil)
 }
