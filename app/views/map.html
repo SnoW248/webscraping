@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Ramen Map</title>
+    <title>Shop Map</title>
     <meta name="viewport" content="initial-scale=1.0">
     <meta charset="utf-8">
     <style>
@@ -27,6 +27,11 @@
   </head>
   <body>
     <input id="pac-input" class="controls" type="text" placeholder="Search Box">
+    <select id="genre">
+        <option value="ramen">ラーメン</option>
+        <option value="curry">カレー</option>
+        <option value="sweets">スイーツ</option>
+    </select>
     <div id="map"></div>
 
     <script>
@@ -34,20 +39,18 @@
       var marker = []
       var infoWindow = []
       var shinjukuStation = {lat: 35.68, lng: 139.700}
+      var val
+      var params
       function initMap() {
         map = new google.maps.Map(document.getElementById('map'), {
           center: shinjukuStation,
           zoom: 10
         });
       }
-      $(function(){
-        $.ajax({
-            url:'/api/geocode/',
-            type:'GET',
-            ContentType:"json",
-        })
-
-        .done( (data) => {
+      function send(params){
+        initMap();
+        
+        $.get('/api/geocode/', params).done( (data) => {
           for (var i = 0; i < data.length; i++) {
             marker[i] = new google.maps.Marker({
                 position: {lat: data[i].latitude, lng: data[i].longitude},
@@ -67,7 +70,7 @@
           console.log('ok');
           searchBox();
         });
-      });
+      }
       function markerEvent(i) {
         marker[i].addListener('click', function() { 
           infoWindow[i].open(map, marker[i]);
@@ -131,6 +134,17 @@
             }
           });
           map.fitBounds(bounds);
+        });
+      }
+
+      window.onload = function () {
+        params = {"genre": "ramen"}
+        send(params);
+        $('#genre').change(function() {
+          val = $(this).val();
+          console.log(val);
+          params = {"genre": val}
+          send(params);
         });
       }
     </script>

@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/transform"
@@ -33,23 +34,37 @@ type StoreInfo struct {
 	Longitude float64 `json:"longitude"`
 }
 
-func GetPage(baseUrl string) {
-	base, _ := url.Parse(baseUrl)
+var baseURL = "https://tabelog.com/rstLst/"
+
+func GetPage(genre string) {
+	base, _ := url.Parse(baseURL + genre + "/")
+	if err := os.MkdirAll("html/"+genre, 0777); err != nil {
+		log.Fatalln(err)
+	}
+	var wg sync.WaitGroup
+	maxCh := make(chan int, 10)
 	for page := 1; page < 61; page++ {
-		reference, _ := url.Parse(strconv.Itoa(page) + "/?Srt=D&SrtT=rt&sort_mode=1&sk=%E3%83%A9%E3%83%BC%E3%83%A1%E3%83%B3&svt=1900&svps=2")
-		endpoint := base.ResolveReference(reference).String()
-		doc, err := goquery.NewDocument(endpoint)
-		if err != nil {
-			fmt.Print("url scarapping failed")
-		}
-		body, err := doc.Find("body").Html()
-		if err != nil {
-			fmt.Print("dom get failed")
-		}
-		title := fmt.Sprintf("%s.html", doc.Find("title").Text())
-		if err := ioutil.WriteFile("html/"+title, []byte(body), 0666); err != nil {
-			fmt.Println("write file err")
-		}
+		wg.Add(1)
+		maxCh <- 1
+		time.Sleep(1 * time.Second)
+		go func(page int) {
+			defer wg.Done()
+			reference, _ := url.Parse(strconv.Itoa(page) + "/?Srt=D&SrtT=rt&sort_mode=1&sk=%E3%83%A9%E3%83%BC%E3%83%A1%E3%83%B3&svt=1900&svps=2")
+			endpoint := base.ResolveReference(reference).String()
+			doc, err := goquery.NewDocument(endpoint)
+			if err != nil {
+				fmt.Print("url scarapping failed")
+			}
+			body, err := doc.Find("body").Html()
+			if err != nil {
+				fmt.Print("dom get failed")
+			}
+			title := fmt.Sprintf("%s.html", doc.Find("title").Text())
+			if err := ioutil.WriteFile("html/"+genre+"/"+title, []byte(body), 0666); err != nil {
+				fmt.Println("write file err")
+			}
+			<-maxCh
+		}(page)
 	}
 }
 
@@ -86,11 +101,15 @@ func GetGeocode(address string) (latitude, longitude float64) {
 	return result[0].Geometry.Location.Lat, result[0].Geometry.Location.Lng
 }
 
-func GetInfo(dir string, page int, writeMode string) {
-	if file, _ := ioutil.ReadFile("data/ramen." + writeMode); file != nil {
+func GetInfo(genre string, page int, writeMode string) {
+	if file, _ := ioutil.ReadFile("data/" + genre + "." + writeMode); file != nil {
 		return
 	}
-	filesInfo, _ := ioutil.ReadDir(dir)
+	filesInfo, _ := ioutil.ReadDir("html/" + genre)
+	if filesInfo == nil {
+		GetPage(genre)
+		filesInfo, _ = ioutil.ReadDir("html/" + genre)
+	}
 	var stores []StoreInfo
 	var wg sync.WaitGroup
 	maxCh := make(chan int, 10)
@@ -102,13 +121,18 @@ func GetInfo(dir string, page int, writeMode string) {
 			break
 		}
 		go func(i int, fileInfo os.FileInfo) {
+			time.Sleep(1 * time.Second)
 			defer wg.Done()
-			file, _ := ioutil.ReadFile(dir + "/" + fileInfo.Name())
+			file, err := ioutil.ReadFile("html/" + genre + "/" + fileInfo.Name())
+			if err != nil {
+				log.Println(err)
+				return
+			}
 			stringReader := strings.NewReader(string(file))
 			doc, _ := goquery.NewDocumentFromReader(stringReader)
 
 			var store StoreInfo
-			store.Genre = dir
+			store.Genre = genre
 			doc.Find("ul.js-rstlist-info li.list-rst").Each(func(_ int, s *goquery.Selection) {
 				store.URL, _ = s.Find("a.list-rst__rst-name-target.cpy-rst-name").Attr("href")
 				store.Address = GetAddress(store.URL)
@@ -125,14 +149,14 @@ func GetInfo(dir string, page int, writeMode string) {
 	wg.Wait()
 
 	if writeMode == "csv" {
-		WriteCSV(stores)
+		WriteCSV(stores, genre)
 	} else if writeMode == "json" {
-		WriteJson(stores)
+		WriteJson(stores, genre)
 	}
 }
 
-func WriteCSV(stores []StoreInfo) {
-	file, err := os.OpenFile("csv/ramen.csv", os.O_CREATE|os.O_APPEND, 0600)
+func WriteCSV(stores []StoreInfo, genre string) {
+	file, err := os.OpenFile("data/"+genre+".csv", os.O_CREATE|os.O_APPEND, 0600)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -153,7 +177,7 @@ func WriteCSV(stores []StoreInfo) {
 	writer.Flush()
 }
 
-func WriteJson(stores []StoreInfo) {
+func WriteJson(stores []StoreInfo, genre string) {
 	jsonStore, err := json.Marshal(stores)
 	if err != nil {
 		fmt.Println("JSON Marshal error:", err)
@@ -164,11 +188,11 @@ func WriteJson(stores []StoreInfo) {
 	// プリフィックスなし、スペース4つでインデント
 	json.Indent(out, jsonStore, "", "    ")
 
-	ioutil.WriteFile("csv/ramen.json", out.Bytes(), 0664)
+	ioutil.WriteFile("data/"+genre+".json", out.Bytes(), 0664)
 }
 
-func ReadJson() ([]StoreInfo, error) {
-	file, err := ioutil.ReadFile("csv/ramen.json")
+func ReadJson(genre string) ([]StoreInfo, error) {
+	file, err := ioutil.ReadFile("data/" + genre + ".csv")
 	if err != nil {
 		log.Fatalln(err)
 	}

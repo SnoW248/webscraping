@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"webscraping/app/models"
 )
 
 var templates = template.Must(template.ParseFiles("app/views/map.html"))
@@ -53,9 +54,16 @@ func apiMakeHandler(fn func(http.ResponseWriter, *http.Request)) http.HandlerFun
 }
 
 func mapHandler(w http.ResponseWriter, r *http.Request) {
-	json, err := ioutil.ReadFile("data/ramen.json")
+	genre := r.URL.Query().Get("genre")
+	if genre == "" {
+		APIError(w, "No genre param", http.StatusBadRequest)
+		return
+	}
+
+	json, err := ioutil.ReadFile("data/" + genre + ".json")
 	if err != nil {
-		log.Fatalln(err)
+		log.Println(err)
+		models.GetInfo(genre, 60, "json")
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(json)
